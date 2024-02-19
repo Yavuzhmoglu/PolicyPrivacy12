@@ -56,7 +56,6 @@ namespace ExcelFileProcessor.DataAccess
 
 
 
-
 // DataAccess/DatabaseManager.cs
 using System;
 using System.Collections.Generic;
@@ -109,7 +108,7 @@ namespace ExcelFileProcessor.DataAccess
 
         private int GetCountryId(string ulke, SqlConnection connection)
         {
-            string selectQuery = "SELECT Id FROM Country WHERE Name = @Ulke";
+            string selectQuery = "SELECT Id FROM ulkeler WHERE Name = @Ulke";
 
             using (SqlCommand command = new SqlCommand(selectQuery, connection))
             {
@@ -123,7 +122,7 @@ namespace ExcelFileProcessor.DataAccess
 
         private int InsertCountryAndGetId(string ulke, SqlConnection connection)
         {
-            string insertQuery = "INSERT INTO Country (Name) OUTPUT INSERTED.ID VALUES (@Ulke)";
+            string insertQuery = "INSERT INTO ulkeler (Name) OUTPUT INSERTED.ID VALUES (@Ulke)";
 
             using (SqlCommand command = new SqlCommand(insertQuery, connection))
             {
@@ -134,4 +133,5 @@ namespace ExcelFileProcessor.DataAccess
         }
     }
 }
+
 
