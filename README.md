@@ -135,3 +135,248 @@ namespace ExcelFileProcessor.DataAccess
 }
 
 
+
+// DataAccess/ErrorLogManager.cs
+using System;
+using System.IO;
+
+namespace ExcelFileProcessor.DataAccess
+{
+    public class ErrorLogManager
+    {
+        private readonly string errorLogPath;
+
+        public ErrorLogManager()
+        {
+            // Hata dosyalarının ana dizini
+            string baseDirectory = @"D:\HedefExcel\hatalilar\";
+
+            // Yıl, ay ve gün bilgilerini al
+            string year = DateTime.Now.Year.ToString();
+            string month = DateTime.Now.Month.ToString("00");
+            string day = DateTime.Now.Day.ToString("00");
+
+            // Hata dosyasının tam dizini
+            errorLogPath = Path.Combine(baseDirectory, year, month, day);
+
+            // Eğer dosya dizini yoksa oluştur
+            if (!Directory.Exists(errorLogPath))
+            {
+                Directory.CreateDirectory(errorLogPath);
+            }
+        }
+
+        public void LogError(string errorMessage)
+        {
+            // Hata mesajını dosyaya yaz
+            string errorFilePath = Path.Combine(errorLogPath, "error_log.txt");
+            File.AppendAllText(errorFilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {errorMessage}\n");
+        }
+    }
+}
+
+
+
+
+
+
+
+
+// Forms/Form1.cs
+using System;
+using System.IO;
+using System.Timers;
+using System.Windows.Forms;
+using Excel = Microsoft.Office.Interop.Excel;
+
+namespace ExcelFileProcessor.Forms
+{
+    public partial class Form1 : Form
+    {
+        private string kaynakDizin = @"D:\KaynakExcel";
+        private string hedefDizin = @"D:\HedefExcel";
+        private string hatalilarDizin = @"D:\HedefExcel\hatalilar";
+
+        private System.Timers.Timer timer;
+        private Queue<string> dosyaKuyrugu = new Queue<string>();
+        private object kuyrukLock = new object();
+        private bool islemDevamEdiyor = false;
+
+        private DataAccess.DatabaseManager databaseManager = new DataAccess.DatabaseManager();
+        private DataAccess.ErrorLogManager errorLogManager = new DataAccess.ErrorLogManager();
+
+        public Form1()
+        {
+            InitializeComponent();
+
+            timer = new System.Timers.Timer
+            {
+                Interval = 5000,
+                AutoReset = true,
+                Enabled = false
+            };
+
+            timer.Elapsed += Timer_Elapsed;
+        }
+
+        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            KontrolEtVeTasi();
+        }
+
+        private void KontrolEtVeTasi()
+        {
+            lock (kuyrukLock)
+            {
+                if (islemDevamEdiyor)
+                    return;
+
+                string[] excelDosyalari = Directory.GetFiles(kaynakDizin, "*.xlsx");
+                foreach (string excelDosyasi in excelDosyalari)
+                {
+                    dosyaKuyrugu.Enqueue(excelDosyasi);
+                }
+
+                islemDevamEdiyor = true;
+            }
+
+            while (dosyaKuyrugu.Count > 0)
+            {
+                string excelDosyasi;
+                lock (kuyrukLock)
+                {
+                    excelDosyasi = dosyaKuyrugu.Dequeue();
+                }
+
+                string dosyaAdi = Path.GetFileName(excelDosyasi);
+                string hedefDosyaYolu = Path.Combine(hedefDizin, dosyaAdi);
+
+                try
+                {
+                    File.Move(excelDosyasi, hedefDosyaYolu);
+
+                    LogMesaji($"Dosya taşındı: {dosyaAdi}");
+
+                    // Veritabanına ekle
+                    ImportAndInsertToDatabase(hedefDosyaYolu);
+                }
+                catch (Exception ex)
+                {
+                    LogMesaji($"Hata oluştu: {ex.Message}");
+                    LogErrorToFile(ex, dosyaAdi);
+
+                    // Hata durumunda Excel dosyasını hatalilar dizinine taşı
+                    MoveToErrorFolder(excelDosyasi);
+                }
+            }
+
+            lock (kuyrukLock)
+            {
+                dosyaKuyrugu.Clear();
+            }
+
+            islemDevamEdiyor = false;
+        }
+
+        private void ImportAndInsertToDatabase(string excelDosyaYolu)
+        {
+            Excel.Application excelApp = new Excel.Application();
+            Excel.Workbook excelWorkbook = excelApp.Workbooks.Open(excelDosyaYolu);
+            Excel.Worksheet excelWorksheet = excelWorkbook.Sheets[1];
+
+            try
+            {
+                for (int row = 2; row <= excelWorksheet.UsedRange.Rows.Count; row++)
+                {
+                    string mesken = excelWorksheet.Cells[row, 1].Value2?.ToString();
+                    string ulke = excelWorksheet.Cells[row, 2].Value2?.ToString();
+                    string saat = excelWorksheet.Cells[row, 4].Value2?.ToString();
+                    string sehir = excelWorksheet.Cells[row, 5].Value2?.ToString();
+                    string hayvan = excelWorksheet.Cells[row, 6].Value2?.ToString();
+                    string oyun = excelWorksheet.Cells[row, 8].Value2?.ToString();
+
+                    databaseManager.InsertData(mesken, ulke, saat, sehir, hayvan, oyun);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMesaji($"Veritabanına ekleme hatası: {ex.Message}");
+                LogErrorToFile(ex, excelDosyaYolu);
+
+                // Hata durumunda Excel dosyasını hatalilar dizinine taşı
+                MoveToErrorFolder(excelDosyaYolu);
+            }
+            finally
+            {
+                excelWorkbook.Close(false);
+                excelApp.Quit();
+            }
+        }
+
+        private void MoveToErrorFolder(string excelDosyaYolu)
+        {
+            try
+            {
+                string dosyaAdi = Path.GetFileName(excelDosyaYolu);
+
+                // Yıl, ay ve gün bilgilerini al
+                string year = DateTime.Now.Year.ToString();
+                string month = DateTime.Now.Month.ToString("00");
+                string day = DateTime.Now.Day.ToString("00");
+
+                // Hatalilar dizininin tam dizini
+                string hatalilarDosyaYolu = Path.Combine(hatalilarDizin, year, month, day, dosyaAdi);
+
+                // Eğer dosya dizini yoksa oluştur
+                string hatalilarDizinPath = Path.Combine(hatalilarDizin, year, month, day);
+                if (!Directory.Exists(hatalilarDizinPath))
+                {
+                    Directory.CreateDirectory(hatalilarDizinPath);
+                }
+
+                File.Move(excelDosyaYolu, hatalilarDosyaYolu);
+                LogMesaji($"Dosya hatalilar dizinine taşındı: {dosyaAdi}");
+            }
+            catch (Exception ex)
+            {
+                LogMesaji($"Hata dosya taşıma hatası: {ex.Message}");
+            }
+        }
+
+        private void LogMesaji(string mesaj)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => LogMesaji(mesaj)));
+            }
+            else
+            {
+                listBoxLog.Items.Add($"{DateTime.Now:HH:mm:ss} - {mesaj}");
+                listBoxLog.SelectedIndex = listBoxLog.Items.Count - 1;
+            }
+        }
+
+        private void LogErrorToFile(Exception ex, string dosyaAdi)
+        {
+            string errorMessage = $"Hata dosya adı: {dosyaAdi}, Hata: {ex.Message}";
+            errorLogManager.LogError(errorMessage);
+        }
+
+        private void btnBaslat_Click(object sender, EventArgs e)
+        {
+            timer.Start();
+            LogMesaji("Excel dosyalarını bekliyorum.");
+        }
+
+        private void btnDurdur_Click(object sender, EventArgs e)
+        {
+            timer.Stop();
+            LogMesaji("Kontrol ve taşıma durduruldu.");
+        }
+    }
+}
+
+
+
+
+
