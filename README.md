@@ -38,3 +38,100 @@ These terms and conditions are effective as of 2021-11-30
 **Contact Us**
 
 If you have any questions or suggestions about my Terms and Conditions, do not hesitate to contact me at justtouch@gmail.com.
+
+
+
+
+
+// DataAccess/Country.cs
+namespace ExcelFileProcessor.DataAccess
+{
+    public class Country
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Code { get; set; }
+    }
+}
+
+
+
+
+// DataAccess/DatabaseManager.cs
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+
+namespace ExcelFileProcessor.DataAccess
+{
+    public class DatabaseManager
+    {
+        private string connectionString = "Data Source=DESKTOP-OPQQL1L\\SQLEXPRESS;Initial Catalog=DenemeExcelVT;Integrated Security=True";
+
+        public void InsertData(string mesken, string ulke, string saat, string sehir, string hayvan, string oyun)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                // Önce ülkeyi kontrol et ve gerekirse ekleyerek ülke ID'sini al
+                int ulkeId = GetOrInsertCountryId(ulke, connection);
+
+                string insertQuery = "INSERT INTO DenemeExcelVT.dbo.KayitExcel (Mesken, UlkeId, Saat, Sehir, Hayvan, Oyun) VALUES (@Mesken, @UlkeId, @Saat, @Sehir, @Hayvan, @Oyun)";
+
+                using (SqlCommand command = new SqlCommand(insertQuery, connection))
+                {
+                    command.Parameters.AddWithValue("@Mesken", mesken);
+                    command.Parameters.AddWithValue("@UlkeId", ulkeId);
+                    command.Parameters.AddWithValue("@Saat", string.IsNullOrEmpty(saat) ? (object)DBNull.Value : saat);
+                    command.Parameters.AddWithValue("@Sehir", sehir);
+                    command.Parameters.AddWithValue("@Hayvan", hayvan);
+                    command.Parameters.AddWithValue("@Oyun", oyun);
+
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private int GetOrInsertCountryId(string ulke, SqlConnection connection)
+        {
+            // Ülkeyi kontrol et
+            int ulkeId = GetCountryId(ulke, connection);
+
+            // Eğer ülke listede yoksa, ekleyerek ID'sini al
+            if (ulkeId == 0)
+            {
+                ulkeId = InsertCountryAndGetId(ulke, connection);
+            }
+
+            return ulkeId;
+        }
+
+        private int GetCountryId(string ulke, SqlConnection connection)
+        {
+            string selectQuery = "SELECT Id FROM Country WHERE Name = @Ulke";
+
+            using (SqlCommand command = new SqlCommand(selectQuery, connection))
+            {
+                command.Parameters.AddWithValue("@Ulke", ulke);
+
+                var result = command.ExecuteScalar();
+
+                return (result != null && result != DBNull.Value) ? Convert.ToInt32(result) : 0;
+            }
+        }
+
+        private int InsertCountryAndGetId(string ulke, SqlConnection connection)
+        {
+            string insertQuery = "INSERT INTO Country (Name) OUTPUT INSERTED.ID VALUES (@Ulke)";
+
+            using (SqlCommand command = new SqlCommand(insertQuery, connection))
+            {
+                command.Parameters.AddWithValue("@Ulke", ulke);
+
+                return (int)command.ExecuteScalar();
+            }
+        }
+    }
+}
+
