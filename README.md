@@ -536,6 +536,60 @@ private void LogColoredMessage(string message, Color color)
 }
 
 
+Animasyonlar için
+
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+
+public partial class Form1 : Form
+{
+    private Timer animationTimer = new Timer();
+    private int currentFrame = 0;
+
+    public Form1()
+    {
+        InitializeComponent();
+
+        animationTimer.Interval = 100; // Her çerçeve arası süre
+        animationTimer.Tick += AnimationTimer_Tick;
+    }
+
+    private void AnimationTimer_Tick(object sender, EventArgs e)
+    {
+        // Her çerçeve için gerekli işlemleri yapın
+
+        // PictureBox'a çerçeveyi çizin
+        pictureBox.Image = GetNextFrame();
+    }
+
+    private Bitmap GetNextFrame()
+    {
+        // Çerçeveyi döndürmek için gerekli işlemleri yapın
+        // Örneğin, resimlerinizi bir dizi içinde tutun ve sırayla gösterin
+
+        // Örnek olarak resim dizisi kullanma:
+        string[] imagePaths = { "frame1.png", "frame2.png", "frame3.png" };
+
+        Bitmap frame = new Bitmap(imagePaths[currentFrame]);
+
+        // Dizinin sonuna geldiysek sıfıra geri dön
+        currentFrame = (currentFrame + 1) % imagePaths.Length;
+
+        return frame;
+    }
+
+    private void btnStartAnimation_Click(object sender, EventArgs e)
+    {
+        animationTimer.Start();
+    }
+
+    private void btnStopAnimation_Click(object sender, EventArgs e)
+    {
+        animationTimer.Stop();
+    }
+}
+
 
 
 
