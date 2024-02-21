@@ -431,6 +431,114 @@ private void LogColoredMessage(string message)
 }
 
 
+---------
+
+
+private void MoveFileWithFileStream(string sourcePath, string destinationPath)
+{
+    try
+    {
+        using (FileStream sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read))
+        {
+            using (FileStream destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write))
+            {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+
+                while ((bytesRead = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    destinationStream.Write(buffer, 0, bytesRead);
+                }
+            }
+        }
+
+        // Dosya başarıyla taşındıysa, orijinal dosyayı sil
+        File.Delete(sourcePath);
+    }
+    catch (Exception ex)
+    {
+        LogColoredMessage($"Dosya taşıma hatası: {ex.Message}", Color.Red);
+    }
+}
+
+
+
+private void KontrolEtVeTasi()
+{
+    lock (kuyrukLock)
+    {
+        if (islemDevamEdiyor)
+            return;
+
+        string[] excelDosyalari = Directory.GetFiles(kaynakDizin, "*.xlsx");
+        foreach (string excelDosyasi in excelDosyalari)
+        {
+            dosyaKuyrugu.Enqueue(excelDosyasi);
+        }
+
+        islemDevamEdiyor = true;
+    }
+
+    while (dosyaKuyrugu.Count > 0)
+    {
+        string excelDosyasi;
+        lock (kuyrukLock)
+        {
+            excelDosyasi = dosyaKuyrugu.Dequeue();
+        }
+
+        string dosyaAdi = Path.GetFileName(excelDosyasi);
+        string hedefDosyaYolu = Path.Combine(hedefDizin, dosyaAdi);
+
+        try
+        {
+            MoveFileWithFileStream(excelDosyasi, hedefDosyaYolu);
+
+            LogColoredMessage($"Dosya taşındı: {dosyaAdi}", Color.Green);
+
+            // Veritabanına ekle
+            ImportAndInsertToDatabase(hedefDosyaYolu);
+        }
+        catch (Exception ex)
+        {
+            LogColoredMessage($"Hata oluştu: {ex.Message}", Color.Red);
+            LogErrorToFile(ex, dosyaAdi);
+
+            // Hata durumunda Excel dosyasını hatalilar dizinine taşı
+            MoveToErrorFolder(excelDosyasi);
+        }
+    }
+
+    lock (kuyrukLock)
+    {
+        dosyaKuyrugu.Clear();
+    }
+
+    islemDevamEdiyor = false;
+}
+
+private void LogColoredMessage(string message, Color color)
+{
+    if (InvokeRequired)
+    {
+        Invoke(new Action(() => LogColoredMessage(message, color)));
+    }
+    else
+    {
+        listBoxLog.SelectionStart = listBoxLog.TextLength;
+        listBoxLog.SelectionLength = 0;
+
+        listBoxLog.SelectionColor = color;
+        listBoxLog.AppendText(message + Environment.NewLine);
+
+        listBoxLog.SelectionColor = listBoxLog.ForeColor;
+    }
+}
+
+
+
+
+
 
 
 
