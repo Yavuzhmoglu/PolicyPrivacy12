@@ -378,5 +378,60 @@ namespace ExcelFileProcessor.Forms
 
 
 
+--
+
+
+
+private void AddColoredTextToListBox(string text)
+{
+    if (InvokeRequired)
+    {
+        Invoke(new Action(() => AddColoredTextToListBox(text)));
+    }
+    else
+    {
+        // Farklı renklerin bulunduğu bir dizi
+        Color[] colors = { Color.Red, Color.Green, Color.Blue, Color.Orange, Color.Purple };
+
+        // ListBox'a satır ekle
+        listBoxLog.Items.Add(text);
+
+        // Eklenen satırın indeksi
+        int index = listBoxLog.Items.Count - 1;
+
+        // Renk indeksi (satır indeksi ile renk dizisi uzunluğunun modu alınarak döngü yapılır)
+        int colorIndex = index % colors.Length;
+
+        // Satırın rengini belirle
+        listBoxLog.SetSelected(index, true);
+        listBoxLog.SelectedIndices.Clear(); // Seçimi temizle
+        listBoxLog.SelectedIndices.Add(index); // İlgili satırı seç
+
+        // Satırın rengini değiştir
+        listBoxLog.SelectionColor = colors[colorIndex];
+    }
+}
+
+
+private void btnBaslat_Click(object sender, EventArgs e)
+{
+    timer.Start();
+    LogColoredMessage("Excel dosyalarını bekliyorum.");
+}
+
+private void btnDurdur_Click(object sender, EventArgs e)
+{
+    timer.Stop();
+    LogColoredMessage("Kontrol ve taşıma durduruldu.");
+}
+
+private void LogColoredMessage(string message)
+{
+    AddColoredTextToListBox(message);
+}
+
+
+
+
 
 
