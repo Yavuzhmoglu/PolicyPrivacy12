@@ -591,6 +591,114 @@ public partial class Form1 : Form
 }
 
 
+------------------------------------
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Windows.Forms;
+
+namespace DenemeAAA
+{
+    public partial class Form1 : Form
+    {
+        private string connectionString = "Data Source=DESKTOP-OPQQL1L\\SQLEXPRESS;Initial Catalog=DenemeExcelVT;Integrated Security=True";
+        private List<Model> dataList = new List<Model>();
+        private int pageSize = 10;
+        private int totalRowCount = 0;
+        private int currentPage = 0;
+
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void btnGetData_Click(object sender, EventArgs e)
+        {
+            // Veritabanından toplam satır sayısını al
+            GetTotalRowCount();
+
+            // Tüm veriyi çek
+            GetAllData();
+        }
+
+        private void GetTotalRowCount()
+        {
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                string sql = @"
+                    SELECT COUNT(*)
+                    FROM KayitExcel;
+                ";
+
+                SqlCommand command = new SqlCommand(sql, connection);
+                totalRowCount = (int)command.ExecuteScalar();
+            }
+        }
+
+        private void GetAllData()
+        {
+            // Veri çekme işlemi için sayfa numarasını arttır
+            currentPage++;
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                string sql = @"
+                    SELECT *
+                    FROM (
+                        SELECT *, ROW_NUMBER() OVER (ORDER BY Mesken) AS RowNum
+                        FROM KayitExcel
+                    ) AS Data
+                    WHERE Data.RowNum > @Offset
+                    AND Data.RowNum <= @Offset + @PageSize;
+                ";
+
+                SqlCommand command = new SqlCommand(sql, connection);
+                command.Parameters.AddWithValue("@Offset", (currentPage - 1) * pageSize);
+                command.Parameters.AddWithValue("@PageSize", pageSize);
+
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        Model model = new Model();
+                        // Örnek olarak veri okuma ve model oluşturma işlemleri yapılabilir
+                        model.mesken = reader.GetString(0);
+                        model.ulke = reader.GetString(1);
+                        // Diğer sütunlar için okuma işlemleri devam edebilir
+
+                        dataList.Add(model);
+                    }
+                }
+            }
+
+            // Eğer tüm veri çekildiyse veya son sayfaya ulaşıldıysa butonu devre dışı bırak
+            if (currentPage * pageSize >= totalRowCount)
+            {
+                btnGetData.Enabled = false;
+            }
+
+            // Verileri göstermek için DataGridView kontrolüne ekleme yapabilirsiniz
+            listBoxData.DataSource = null;
+            listBoxData.DataSource = dataList;
+        }
+    }
+
+    public class Model
+    {
+        public string mesken { get; set; }
+        public string ulke { get; set; }
+        // Diğer sütunlar için property'ler eklenebilir
+    }
+}
+
+
+
 
 
 
